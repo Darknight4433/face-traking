@@ -94,7 +94,11 @@ def main():
                     2, (0, 255, 0), 2)
         
         # NOTE: If running headless, comment these out!
+        # Headless mode enabled by default for speed
         # cv2.imshow("Image", img)
+        if int(fps) % 30 == 0: # Print stats every ~1 sec (assuming 30fps loop)
+             print(f"FPS: {int(fps)} | Face Center: {face_center if faces else 'None'}")
+
         # if cv2.waitKey(1) & 0xFF == ord('q'):
         #     break
             
