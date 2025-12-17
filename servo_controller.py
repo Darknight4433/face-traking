@@ -73,8 +73,10 @@ class ServoManager:
             # If face is right of center (positive diff_x), we need to turn Right (decrease angle).
             # This directionality often needs tuning.
             
-            error_x = diff_x * self.kp
-            self.curr_pan -= error_x
+            # INVERTED DIRECTION:
+            # If camera moves "away", flip the - to +
+            # Try 1: self.curr_pan += error_x
+            self.curr_pan += error_x
             
             # Constrain
             if self.curr_pan > self.max_angle: self.curr_pan = self.max_angle
@@ -85,7 +87,8 @@ class ServoManager:
         if abs(diff_y) > self.dead_zone:
             # If face is below center (positive diff_y), we need to look down.
             error_y = diff_y * self.kp
-            self.curr_tilt += error_y # Assuming increasing angle looks down
+            # Invert this if up/down is wrong too
+            self.curr_tilt -= error_y 
             
             # Constrain
             if self.curr_tilt > self.max_angle: self.curr_tilt = self.max_angle
