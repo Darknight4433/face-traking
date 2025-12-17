@@ -30,62 +30,77 @@ class HumanTracker:
                 cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 255), 2)
                 cv2.circle(img, (cx, cy), 5, (0, 255, 0), cv2.FILLED)
 
-        return img, faces
+from threading import Thread
+
+class WebcamVideoStream:
+    def __init__(self, src=0, width=320, height=240):
+        self.stream = cv2.VideoCapture(src)
+        self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.stream.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.stream.set(cv2.CAP_PROP_FPS, 30)
+        (self.grabbed, self.frame) = self.stream.read()
+        self.stopped = False
+
+    def start(self):
+        Thread(target=self.update, args=()).start()
+        return self
+
+    def update(self):
+        while True:
+            if self.stopped:
+                return
+            (self.grabbed, self.frame) = self.stream.read()
+    
+    def read(self):
+        return self.frame
+
+    def stop(self):
+        self.stopped = True
+        self.stream.release()
 
 def main():
-    # Try different camera indices
-    cap = None
+    # Identify camera index
+    cam_index = 0
     for i in [-1, 0, 1]:
         try:
-            print(f"Trying camera index {i}...")
-            temp_cap = cv2.VideoCapture(i)
-            if temp_cap.isOpened():
-                cap = temp_cap
-                print(f"Success: Camera found at index {i}")
+            temp = cv2.VideoCapture(i)
+            if temp.isOpened():
+                cam_index = i
+                temp.release()
                 break
-        except:
-            continue
-            
-    if cap is None or not cap.isOpened():
-        print("Error: Could not open any camera.")
-        return
-
+        except: pass
+        
+    print(f"Starting Threaded Video Stream on Camera {cam_index}...")
+    
+    # Start threaded stream
+    vs = WebcamVideoStream(src=cam_index, width=320, height=240).start()
+    # Allow camera to warm up
+    time.sleep(2.0)
+    
     tracker = HumanTracker()
     servo = ServoManager(pan_pin=17, tilt_pin=27) 
     
-    # Set camera resolution (Lower resolution = faster processing on Pi)
-    w, h = 320, 240
-    # Sometimes setting resolution causes issues on certain legacy drivers
-    try:
-        cap.set(3, w)
-        cap.set(4, h)
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # CRITICAL: Reduces delay/lag
-        cap.set(cv2.CAP_PROP_FPS, 30)
-    except:
-        pass
-    
-    img_center = (w // 2, h // 2)
+    img_center = (160, 120)
     p_time = 0
 
-    print("Starting Face Tracking with Haar Cascades...")
-
     while True:
-        success, img = cap.read()
-        if not success:
+        img = vs.read()
+        if img is None:
             break
 
-        # Optimization: detection parameters tuned for speed (1.2 scale factor)
+        # Flip for mirror effect (optional, feels more natural)
+        img = cv2.flip(img, 1)
+
+        # Optimization: process every frame, but keep math simple
         img, faces = tracker.find_faces(img)
 
         if faces:
-            # Get the center of the first detected face and update servos
             face_center = faces[0][2]
             pan, tilt = servo.update(face_center, img_center)
-            
-            # Visuals
+            # visual feedback
             cv2.line(img, img_center, face_center, (255, 0, 0), 2)
         
-        # FPS Calculation
         c_time = time.time()
         fps = 1 / (c_time - p_time) if (c_time - p_time) > 0 else 0
         p_time = c_time
@@ -93,17 +108,12 @@ def main():
         cv2.putText(img, f'FPS: {int(fps)}', (10, 30), cv2.FONT_HERSHEY_PLAIN,
                     2, (0, 255, 0), 2)
         
-        
-        # Display the resulting frame
         cv2.imshow("Face Tracking", img)
         
-        if int(fps) % 30 == 0: # Print stats every ~1 sec
-             print(f"FPS: {int(fps)} | Face Center: {face_center if faces else 'None'}")
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
             
-    cap.release()
+    vs.stop()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
