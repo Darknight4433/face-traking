@@ -30,6 +30,8 @@ class HumanTracker:
                 cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 255), 2)
                 cv2.circle(img, (cx, cy), 5, (0, 255, 0), cv2.FILLED)
 
+        return img, faces
+
 from threading import Thread
 
 class WebcamVideoStream:
