@@ -31,14 +31,34 @@ class HumanTracker:
         return img, faces
 
 def main():
-    cap = cv2.VideoCapture(0)
+    # Try different camera indices
+    cap = None
+    for i in [-1, 0, 1]:
+        try:
+            print(f"Trying camera index {i}...")
+            temp_cap = cv2.VideoCapture(i)
+            if temp_cap.isOpened():
+                cap = temp_cap
+                print(f"Success: Camera found at index {i}")
+                break
+        except:
+            continue
+            
+    if cap is None or not cap.isOpened():
+        print("Error: Could not open any camera.")
+        return
+
     tracker = HumanTracker()
     servo = ServoManager(pan_pin=17, tilt_pin=27) 
     
     # Set camera resolution (Lower resolution = faster processing on Pi)
-    w, h = 320, 240 # Lowered to 320x240 for reliable Pi performance with Haar
-    cap.set(3, w)
-    cap.set(4, h)
+    w, h = 320, 240
+    # Sometimes setting resolution causes issues on certain legacy drivers
+    try:
+        cap.set(3, w)
+        cap.set(4, h)
+    except:
+        pass
     
     img_center = (w // 2, h // 2)
     p_time = 0
