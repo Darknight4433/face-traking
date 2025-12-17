@@ -1,4 +1,3 @@
 opencv-python
 gpiozero
 pigpio
-mediapipe
