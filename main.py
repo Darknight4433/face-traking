@@ -13,7 +13,9 @@ class HumanTracker:
     def find_faces(self, img, draw=True):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         # Detect faces
-        faces_rects = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+        # Speed tweak: scaleFactor 1.1 -> 1.3 (Faster, slightly less accurate)
+        # minNeighbors 4 -> 5 (Reduces false positives)
+        faces_rects = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(30, 30))
         
         faces = []
         for (x, y, w, h) in faces_rects:
@@ -57,6 +59,8 @@ def main():
     try:
         cap.set(3, w)
         cap.set(4, h)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # CRITICAL: Reduces delay/lag
+        cap.set(cv2.CAP_PROP_FPS, 30)
     except:
         pass
     
@@ -70,6 +74,7 @@ def main():
         if not success:
             break
 
+        # Optimization: detection parameters tuned for speed (1.2 scale factor)
         img, faces = tracker.find_faces(img)
 
         if faces:
