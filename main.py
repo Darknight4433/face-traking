@@ -1,55 +1,49 @@
 
 import cv2
-import mediapipe as mp
 import time
 from servo_controller import ServoManager
 
 class HumanTracker:
-    def __init__(self, detection_confidence=0.5, tracking_confidence=0.5):
-        self.mp_face_detection = mp.solutions.face_detection
-        self.face_detection = self.mp_face_detection.FaceDetection(
-            min_detection_confidence=detection_confidence)
-        self.mp_draw = mp.solutions.drawing_utils
+    def __init__(self):
+        # Load the cascade
+        # We use the absolute path or relative if in same folder. 
+        # OpenCV usually includes this.
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
     def find_faces(self, img, draw=True):
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        self.results = self.face_detection.process(img_rgb)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # Detect faces
+        faces_rects = self.face_cascade.detectMultiScale(gray, 1.1, 4)
         
         faces = []
-        if self.results.detections:
-            for id, detection in enumerate(self.results.detections):
-                bboxC = detection.location_data.relative_bounding_box
-                ih, iw, ic = img.shape
-                bbox = int(bboxC.xmin * iw), int(bboxC.ymin * ih), \
-                       int(bboxC.width * iw), int(bboxC.height * ih)
-                
-                cx = bbox[0] + (bbox[2] // 2)
-                cy = bbox[1] + (bbox[3] // 2)
-                
-                faces.append([id, bbox, (cx, cy), detection.score])
-                
-                if draw:
-                    cv2.rectangle(img, bbox, (255, 0, 255), 2)
-                    cv2.circle(img, (cx, cy), 5, (0, 255, 0), cv2.FILLED)
-                    cv2.putText(img, f'{int(detection.score[0] * 100)}%',
-                                (bbox[0], bbox[1] - 20), cv2.FONT_HERSHEY_PLAIN,
-                                2, (255, 0, 255), 2)
+        for (x, y, w, h) in faces_rects:
+            cx = x + w // 2
+            cy = y + h // 2
+            
+            # Format similar to our previous MP implementation: [id, bbox, center, score]
+            # Score is dummy here (1.0)
+            faces.append([0, (x, y, w, h), (cx, cy), 1.0])
+            
+            if draw:
+                cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 255), 2)
+                cv2.circle(img, (cx, cy), 5, (0, 255, 0), cv2.FILLED)
 
         return img, faces
 
 def main():
     cap = cv2.VideoCapture(0)
     tracker = HumanTracker()
-    servo = ServoManager(pan_pin=17, tilt_pin=27)  # Adjust pins as needed
+    servo = ServoManager(pan_pin=17, tilt_pin=27) 
     
-    # Set camera resolution (lower is faster on Pi)
-    w, h = 640, 480
+    # Set camera resolution (Lower resolution = faster processing on Pi)
+    w, h = 320, 240 # Lowered to 320x240 for reliable Pi performance with Haar
     cap.set(3, w)
     cap.set(4, h)
     
     img_center = (w // 2, h // 2)
-
     p_time = 0
+
+    print("Starting Face Tracking with Haar Cascades...")
 
     while True:
         success, img = cap.read()
@@ -59,28 +53,25 @@ def main():
         img, faces = tracker.find_faces(img)
 
         if faces:
-            # Get the center of the first detected face
+            # Get the center of the first detected face and update servos
             face_center = faces[0][2]
-            
-            # Update servos
             pan, tilt = servo.update(face_center, img_center)
             
-            # Display servo values
-            cv2.putText(img, f'Pan: {pan} Tilt: {tilt}', (20, 110), 
-                        cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 255), 2)
-            cv2.circle(img, img_center, 5, (255, 0, 0), cv2.FILLED) # Show center of image
-            cv2.line(img, img_center, face_center, (255, 0, 0), 2) # Line to face
+            # Visuals
+            cv2.line(img, img_center, face_center, (255, 0, 0), 2)
         
+        # FPS Calculation
         c_time = time.time()
-        fps = 1 / (c_time - p_time)
+        fps = 1 / (c_time - p_time) if (c_time - p_time) > 0 else 0
         p_time = c_time
         
-        cv2.putText(img, f'FPS: {int(fps)}', (20, 70), cv2.FONT_HERSHEY_PLAIN,
-                    3, (0, 255, 0), 3)
+        cv2.putText(img, f'FPS: {int(fps)}', (10, 30), cv2.FONT_HERSHEY_PLAIN,
+                    2, (0, 255, 0), 2)
         
-        cv2.imshow("Image", img)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+        # NOTE: If running headless, comment these out!
+        # cv2.imshow("Image", img)
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     break
             
     cap.release()
     cv2.destroyAllWindows()
